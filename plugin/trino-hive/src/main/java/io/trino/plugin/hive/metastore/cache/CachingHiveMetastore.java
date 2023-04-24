@@ -89,6 +89,7 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.collect.Sets.difference;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
+import static io.trino.collect.cache.CacheUtils.invalidateAllIf;
 import static io.trino.collect.cache.CacheUtils.uncheckedCacheGet;
 import static io.trino.plugin.hive.metastore.HivePartitionName.hivePartitionName;
 import static io.trino.plugin.hive.metastore.HiveTableName.hiveTableName;
@@ -939,9 +940,7 @@ public class CachingHiveMetastore
         invalidateTableCache(databaseName, tableName);
         tableNamesCache.invalidate(databaseName);
         viewNamesCache.invalidate(databaseName);
-        tablePrivilegesCache.asMap().keySet().stream()
-                .filter(userTableKey -> userTableKey.matches(databaseName, tableName))
-                .forEach(tablePrivilegesCache::invalidate);
+        invalidateAllIf(tablePrivilegesCache, userTableKey -> userTableKey.matches(databaseName, tableName));
         invalidateTableStatisticsCache(databaseName, tableName);
         invalidateTablesWithParameterCache(databaseName, tableName);
         invalidatePartitionCache(databaseName, tableName);
@@ -949,16 +948,12 @@ public class CachingHiveMetastore
 
     private void invalidateTableCache(String databaseName, String tableName)
     {
-        tableCache.asMap().keySet().stream()
-                .filter(table -> table.getDatabaseName().equals(databaseName) && table.getTableName().equals(tableName))
-                .forEach(tableCache::invalidate);
+        invalidateAllIf(tableCache, table -> table.getDatabaseName().equals(databaseName) && table.getTableName().equals(tableName));
     }
 
     private void invalidateTableStatisticsCache(String databaseName, String tableName)
     {
-        tableStatisticsCache.asMap().keySet().stream()
-                .filter(table -> table.getDatabaseName().equals(databaseName) && table.getTableName().equals(tableName))
-                .forEach(tableStatisticsCache::invalidate);
+        invalidateAllIf(tableStatisticsCache, table -> table.getDatabaseName().equals(databaseName) && table.getTableName().equals(tableName));
     }
 
     private void invalidateTablesWithParameterCache(String databaseName, String tableName)
@@ -1161,15 +1156,9 @@ public class CachingHiveMetastore
         Predicate<HivePartitionName> hivePartitionPredicate = partitionName -> partitionName.getHiveTableName().equals(hiveTableName) &&
                 partitionPredicate.test(partitionName.getPartitionName());
 
-        partitionCache.asMap().keySet().stream()
-                .filter(hivePartitionPredicate)
-                .forEach(partitionCache::invalidate);
-        partitionFilterCache.asMap().keySet().stream()
-                .filter(partitionFilter -> partitionFilter.getHiveTableName().equals(hiveTableName))
-                .forEach(partitionFilterCache::invalidate);
-        partitionStatisticsCache.asMap().keySet().stream()
-                .filter(hivePartitionPredicate)
-                .forEach(partitionStatisticsCache::invalidate);
+        invalidateAllIf(partitionCache, hivePartitionPredicate);
+        invalidateAllIf(partitionFilterCache, partitionFilter -> partitionFilter.getHiveTableName().equals(hiveTableName));
+        invalidateAllIf(partitionStatisticsCache, hivePartitionPredicate);
     }
 
     @Override
